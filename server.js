@@ -1,80 +1,153 @@
-var fs = require('fs');
-var path;
-getGameServerPath();
+const express = require('express');
+const { ApolloServer, gql } = require('apollo-server-express');
+const jsonwebtoken = require('jsonwebtoken');
 
-var port = 9090;
-var io = require('socket.io')(port);
-var ClientManagerService = require('./app/services/ClientManagerService');
-var LobbyManagerService = require('./app/services/LobbyManagerService');
+// Construct a schema, using GraphQL schema language
+const typeDefs = gql`
+  enum Rank {
+    UNRANKED
+    BRONZE
+    SILVER
+    GOLD
+    PLATINIUM
+    DIAMOND
+    MASTER
+    CHALLENGER
+  }
 
-console.log("---------------------------");
-console.log("League Sandbox Lobby Server");
-console.log("Listening on port " + port);
-console.log("---------------------------");
+  enum Availability {
+    ONLINE
+    IN_GAME
+    IN_LOBBY
+    IN_CHAMPION_SELECT
+    BUSY
+    AWAY
+  }
 
-const connections = {};
-let playerId = 0;
+  type User {
+    id: Int
+    name: String
+    rank: Rank
+    availability: Availability
+    icon: Int
+  }
 
-function broadcast(name, data) {
-    Object.keys(connections).map(x => connections[x]).forEach(conn => {
-        conn.emit(name, data); 
-    });
-}
+  type Lobby {
+    id: Int
+    name: String
+    gamemode: Gamemode
+    maxPlayer: Int
+    players: [User]
+  }
 
-io.on('connection', function(client){
-    console.log("Client connected");
-    ClientManagerService.connected(client);
-    let id = playerId++;
-    connections[id] = client;
+  type Gamemode {
+    name: String
+    map: Int
+  }
 
-    client.on('lobby.list', function(){
-        var lobbies = LobbyManagerService.getLobbies();
-        client.emit('lobby.list', {
-            lobbies
-        });
-    });
+  type Query {
+    user(id: Int!): User
+    users: [User]
+    lobby(id: Int!): Lobby
+    lobbies: [Lobby]
+  }
 
-    client.on('lobby.create', function(options){
-        var newLobby = LobbyManagerService.create(options, path);
-        //We send all the info to let clients add the new server to the list
-        broadcast('lobbylist-add', {
-            newLobby
-        });
-        console.log("New lobby created with ID " + LobbyManagerService.lobbyCount);
-    });
+  type Mutation {
+    connect(username: String!, iconId: Int!): String
+  } 
+`;
 
-    client.on('disconnect', function(){
-        console.log("Client disconnected");
-        ClientManagerService.disconnected(client);
-    });
+const users = [{
+    id: 5,
+    name: 'Neekhaulas',
+    rank: 'CHALLENGER',
+    availability: 'IN_GAME'
+},
+{
+    id: 7,
+    name: 'Boto',
+    rank: 'UNRANKED',
+    availability: 'AWAY'
+},
+{
+    id: 8,
+    name: 'Deudly',
+    rank: 'BRONZE',
+    availability: 'ONLINE'
+},
+{
+    id: 9,
+    name: 'Blitzcrank',
+    rank: 'GOLD',
+    availability: 'IN_LOBBY'
+}];
+
+const lobbies = [{
+    id: 1,
+    name: 'Super lobby',
+    gamemode: {
+        name: 'Kill Deudly',
+        map: 12
+    },
+    maxPlayer: 10,
+    players: [
+        {
+            id: 9,
+            name: 'Blitzcrank',
+            rank: 'GOLD',
+            availability: 'IN_LOBBY'
+        }
+    ]
+}];
+
+let lastId = 0;
+
+// Provide resolver functions for your schema fields
+const resolvers = {
+  Query: {
+    users: () => users,
+    user: (root, args) => users.filter(user => user.id == args.id)[0],
+    lobbies: () => lobbies,
+    lobby: (root, args) => lobbies.filter(lobby => lobby.id == args.id)[0],
+  },
+  Mutation: {
+    connect: (root, args, context) => {
+        const token = jsonwebtoken.sign({
+            id: lastId++
+        }, 'somesuperdupersecret', { expiresIn: '7d' });
+        return token;
+    },
+  }
+};
+
+
+
+const server = new ApolloServer({
+    typeDefs,
+    resolvers,
+    context: ({ req }) => {
+        // get the user token from the headers
+        const token = req.headers.authorization || '';
+
+        console.log(token);
+        
+        if(token != '') {
+            var decoded = jsonwebtoken.verify(token, 'somesuperdupersecret', function(err, decoded) {
+                if(err) {
+                    return null;
+                }
+                return decoded;
+            });
+            return decoded;
+        }
+        return null;
+    },
 });
-function getGameServerPath(){
-    if (fs.existsSync('./config/config.json')) {
-        console.log("Checking your config file");   
-        fs.readFile('./config/config.json', function read(err, data) {
-            if (err) {
-                throw err;
-            }
-            var config = data;
-            var configData = JSON.parse(config);
-            checkGameServer(configData.path);
-        });
-    } else {
-        console.log("Couldn't find Config.json in config folder.");
-        console.log("Please, download the file from the Github repository");
-        process.exit();
-    }
-}
-function checkGameServer(path2){
-    if (fs.existsSync(path2)) {
-        console.log("Detected GameServer!")
-        path = path2;
-    } else {
-        console.log("---------------------------");
-        console.log("Couldn't detect GameServer in: ");
-        console.log(path2);
-        console.log("Note that you should write the path for the exe of GameServer");
-        console.log("---------------------------");
-        process.exit();
-    }
-}
+
+const app = express();
+
+server.applyMiddleware({ app });
+
+app.listen({ port: 4000 }, () =>
+  console.log(`🚀 Server ready at http://localhost:4000${server.graphqlPath}`),
+);
