@@ -86,7 +86,7 @@ const lobbies = [{
     id: 1,
     name: 'Super lobby',
     gamemode: {
-        name: 'Kill Deudly',
+        name: 'Kill the Deudly',
         map: 12
     },
     maxPlayer: 10,
