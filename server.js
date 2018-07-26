@@ -38,6 +38,8 @@ const typeDefs = gql`
     gamemode: Gamemode
     maxPlayer: Int
     players: [User]
+    playerCount: Int
+    owner: User
   }
 
   type Gamemode {
@@ -97,7 +99,13 @@ const lobbies = [{
             rank: 'GOLD',
             availability: 'IN_LOBBY'
         }
-    ]
+    ],
+    owner: {
+        id: 9,
+        name: 'Blitzcrank',
+        rank: 'GOLD',
+        availability: 'IN_LOBBY'
+    }
 }];
 
 let lastId = 0;
@@ -107,7 +115,12 @@ const resolvers = {
   Query: {
     users: () => users,
     user: (root, args) => users.filter(user => user.id == args.id)[0],
-    lobbies: () => lobbies,
+    lobbies: () => {        
+        return lobbies.map(lobby => {
+            lobby.playerCount = lobby.players.length;
+            return lobby;
+        });
+    },
     lobby: (root, args) => lobbies.filter(lobby => lobby.id == args.id)[0],
   },
   Mutation: {
