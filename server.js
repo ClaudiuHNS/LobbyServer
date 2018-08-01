@@ -63,25 +63,29 @@ const users = [{
     id: 5,
     name: 'Neekhaulas',
     rank: 'CHALLENGER',
-    availability: 'IN_GAME'
+    availability: 'IN_GAME',
+    iconId: 1,
 },
 {
     id: 7,
     name: 'Boto',
     rank: 'UNRANKED',
-    availability: 'AWAY'
+    availability: 'AWAY',
+    iconId: 1,
 },
 {
     id: 8,
     name: 'Deudly',
     rank: 'BRONZE',
-    availability: 'ONLINE'
+    availability: 'ONLINE',
+    iconId: 1,
 },
 {
     id: 9,
     name: 'Blitzcrank',
     rank: 'GOLD',
-    availability: 'IN_LOBBY'
+    availability: 'IN_LOBBY',
+    iconId: 1,
 }];
 
 const lobbies = [{
@@ -125,10 +129,14 @@ const resolvers = {
   },
   Mutation: {
     connect: (root, args, context) => {
+        let id = lastId++;
         const token = jsonwebtoken.sign({
-            id: lastId++
+            id
         }, 'somesuperdupersecret', { expiresIn: '7d' });
-        return token;
+        return {
+            token,
+            id,
+        };
     },
   }
 };
